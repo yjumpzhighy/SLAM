@@ -1,2 +1,2 @@
 # VO
-This repo is modified based on ORB-SLAM, which can do monocular camera vision odometry
+This repo is source code based on slam-14 letctures by Gao xiang.
