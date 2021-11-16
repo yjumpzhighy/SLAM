@@ -11,5 +11,7 @@ Four steps for stereo images process:
 6. depth estimation
 
 Results:
+![alt text](https://github.com/yangzuyuanhao/VO/blob/c5ebe4130eebf5f890ef812a03224eff0630891e/stereo/rectified.png)
 
-
+![alt text](https://github.com/yangzuyuanhao/VO/blob/c5ebe4130eebf5f890ef812a03224eff0630891e/stereo/cloud.png
+)
