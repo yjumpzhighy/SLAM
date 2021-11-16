@@ -5,33 +5,30 @@ import stereoconfig
 import pcl
 import pcl.pcl_visualization
  
- 
-# 预处理
+
 def preprocess(img1, img2):
-    # 彩色图->灰度图
+    # col image->grayscale
     if(img1.ndim == 3):
-        img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)  # 通过OpenCV加载的图像通道顺序是BGR
+        img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)  # OpenCV load image as BGR
     if(img2.ndim == 3):
         img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
  
-    # 直方图均衡
+    # histogram balance
     img1 = cv2.equalizeHist(img1)
     img2 = cv2.equalizeHist(img2)
  
     return img1, img2
  
  
-# 消除畸变
+# remove distort
 def undistortion(image, camera_matrix, dist_coeff):
     undistortion_image = cv2.undistort(image, camera_matrix, dist_coeff)
  
     return undistortion_image
  
  
-# 获取畸变校正和立体校正的映射变换矩阵、重投影矩阵
-# @param：config是一个类，存储着双目标定的参数:config = stereoconfig.stereoCamera()
+# get rotation, projection, unprojection matrix
 def getRectifyTransform(height, width, config):
-    # 读取内参和外参
     left_K = config.cam_matrix_left
     right_K = config.cam_matrix_right
     left_distortion = config.distortion_l
@@ -39,7 +36,6 @@ def getRectifyTransform(height, width, config):
     R = config.R
     T = config.T
  
-    # 计算校正变换
     R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(left_K, left_distortion, right_K, right_distortion, (width, height), R, T, alpha=0)
  
     map1x, map1y = cv2.initUndistortRectifyMap(left_K, left_distortion, R1, P1, (width, height), cv2.CV_32FC1)
@@ -48,7 +44,7 @@ def getRectifyTransform(height, width, config):
     return map1x, map1y, map2x, map2y, Q
  
  
-# 畸变校正和立体校正
+# rectify images
 def rectifyImage(image1, image2, map1x, map1y, map2x, map2y):
     rectifyed_img1 = cv2.remap(image1, map1x, map1y, cv2.INTER_AREA)
     rectifyed_img2 = cv2.remap(image2, map2x, map2y, cv2.INTER_AREA)
@@ -56,9 +52,8 @@ def rectifyImage(image1, image2, map1x, map1y, map2x, map2y):
     return rectifyed_img1, rectifyed_img2
  
  
-# 立体校正检验----画线
+# verify rectify result 
 def draw_line(image1, image2):
-    # 建立输出图像
     height = max(image1.shape[0], image2.shape[0])
     width = image1.shape[1] + image2.shape[1]
  
@@ -66,8 +61,8 @@ def draw_line(image1, image2):
     output[0:image1.shape[0], 0:image1.shape[1]] = image1
     output[0:image2.shape[0], image1.shape[1]:] = image2
  
-    # 绘制等间距平行线
-    line_interval = 50  # 直线间隔：50
+    # draw parallel lines
+    line_interval = 50  # space：50
     for k in range(height // line_interval):
         cv2.line(output, (0, line_interval * (k + 1)), (2 * width, line_interval * (k + 1)), (0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
  
@@ -75,9 +70,8 @@ def draw_line(image1, image2):
     return output
  
  
-# 视差计算
+# disparity calculation
 def stereoMatchSGBM(left_image, right_image, down_scale=False):
-    # SGBM匹配参数设置
     if left_image.ndim == 2:
         img_channels = 1
     else:
@@ -96,13 +90,11 @@ def stereoMatchSGBM(left_image, right_image, down_scale=False):
              'mode': cv2.STEREO_SGBM_MODE_SGBM_3WAY
              }
  
-    # 构建SGBM对象
     left_matcher = cv2.StereoSGBM_create(**paraml)
     paramr = paraml
     paramr['minDisparity'] = -paraml['numDisparities']
     right_matcher = cv2.StereoSGBM_create(**paramr)
  
-    # 计算视差图
     size = (left_image.shape[1], left_image.shape[0])
     if down_scale == False:
         disparity_left = left_matcher.compute(left_image, right_image)
@@ -120,14 +112,13 @@ def stereoMatchSGBM(left_image, right_image, down_scale=False):
         disparity_left = factor * disparity_left
         disparity_right = factor * disparity_right
  
-    # 真实视差（因为SGBM算法得到的视差是×16的）
+    # SGBM calculated disparity scales 16, needs to scale back.
     trueDisp_left = disparity_left.astype(np.float32) / 16.
     trueDisp_right = disparity_right.astype(np.float32) / 16.
  
     return trueDisp_left, trueDisp_right
  
  
-# 将h×w×3数组转换为N×3的数组
 def hw3ToN3(points):
     height, width = points.shape[0:2]
  
@@ -140,7 +131,7 @@ def hw3ToN3(points):
     return points_
  
  
-# 深度、颜色转换为点云
+# convert rgbd to point clouds
 def DepthColor2Cloud(points_3d, colors):
     rows, cols = points_3d.shape[0:2]
     size = rows * cols
@@ -148,22 +139,19 @@ def DepthColor2Cloud(points_3d, colors):
     points_ = hw3ToN3(points_3d)
     colors_ = hw3ToN3(colors).astype(np.int64)
  
-    # 颜色信息
     blue = colors_[:, 0].reshape(size, 1)
     green = colors_[:, 1].reshape(size, 1)
     red = colors_[:, 2].reshape(size, 1)
  
     rgb = np.left_shift(blue, 0) + np.left_shift(green, 8) + np.left_shift(red, 16)
  
-    # 将坐标+颜色叠加为点云数组
     pointcloud = np.hstack((points_, rgb)).astype(np.float32)
  
-    # 删掉一些不合适的点
+    # bound
     X = pointcloud[:, 0]
     Y = pointcloud[:, 1]
     Z = pointcloud[:, 2]
  
-    # 下面参数是经验性取值，需要根据实际情况调整
     remove_idx1 = np.where(Z <= 0)
     remove_idx2 = np.where(Z > 15000)
     remove_idx3 = np.where(X > 10000)
@@ -177,7 +165,6 @@ def DepthColor2Cloud(points_3d, colors):
     return pointcloud_1
  
  
-# 点云显示
 def view_cloud(pointcloud):
     cloud = pcl.PointCloud_PointXYZRGBA()
     cloud.from_array(pointcloud)
@@ -193,21 +180,16 @@ def view_cloud(pointcloud):
  
  
 if __name__ == '__main__':
-    # 读取MiddleBurry数据集的图片
-    iml = cv2.imread('/home/zuyuan/Data/middlebury/stereo_im/im0.png')  # 左图
-    imr = cv2.imread('/home/zuyuan/Data/middlebury/stereo_im/im1.png')  # 右图
+    iml = cv2.imread('/home/Data/middlebury/stereo_im/im0.png')  
+    imr = cv2.imread('/home/Data/middlebury/stereo_im/im1.png')
     height, width = iml.shape[0:2]
     
- 
-    # 读取相机内参和外参
     config = stereoconfig.stereoCamera()
  
-    # 立体校正
-    map1x, map1y, map2x, map2y, Q = getRectifyTransform(height, width, config)  # 获取用于畸变校正和立体校正的映射矩阵以及用于计算像素空间坐标的重投影矩阵
+    map1x, map1y, map2x, map2y, Q = getRectifyTransform(height, width, config)  
     iml_rectified, imr_rectified = rectifyImage(iml, imr, map1x, map1y, map2x, map2y)
  
     if True:
-        # 绘制等间距平行线，检查立体校正的效果
         line = draw_line(iml, imr)
         line_rectified = draw_line(iml_rectified, imr_rectified)
         cv2.imshow('image window raw', line)
@@ -216,21 +198,16 @@ if __name__ == '__main__':
         cv2.destroyAllWindows()   
 
 
-    # 立体匹配
-    iml_, imr_ = preprocess(iml, imr)  # 预处理，一般可以削弱光照不均的影响，不做也可以
-    disp, _ = stereoMatchSGBM(iml_, imr_, True)  # 这里传入的是未经立体校正的图像，因为我们使用的middleburry图片已经是校正过的了
+    iml_, imr_ = preprocess(iml, imr) 
+    disp, _ = stereoMatchSGBM(iml_, imr_, True) 
     if False:
         dh, dw = disp.shape[0:2]
         disp_show = cv2.resize(disp, (int(dw/4), int(dh/4)))
         cv2.imshow('image disp', disp_show)
         cv2.waitKey(0)
         cv2.destroyAllWindows()   
- 
-    # 计算像素点的3D坐标（左相机坐标系下）
-    points_3d = cv2.reprojectImageTo3D(disp, Q)  # 可以使用上文的stereo_config.py给出的参数
- 
-    # 构建点云--Point_XYZRGBA格式
+ ）
+    points_3d = cv2.reprojectImageTo3D(disp, Q)  
     pointcloud = DepthColor2Cloud(points_3d, iml)
  
-    # 显示点云
     view_cloud(pointcloud)
