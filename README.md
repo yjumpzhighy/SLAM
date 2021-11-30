@@ -18,9 +18,8 @@ Results:
 # VO
 Mono-camera Visual Odometer
 1. Orb features extraction
-   (adopted orb-slam2 method, evenly distribute keypoints across image)
-   
-   
+   (adopted orb-slam2 method, evenly distribute keypoints across image. )
+   ![alt text](https://github.com/yangzuyuanhao/SLAM/blob/fef14604c2988145069c5031059b59d767a2f952/vo/data/5678.png)
    
 2. Keypoints match with last frame
 3. Build essential matrix E from matched point pairs (>8)
@@ -28,6 +27,9 @@ Mono-camera Visual Odometer
 5. Kalman filter to filter R,T
 6. Apply R,T based on last frame camera pose
 7. Get camera pose of this frame
+
+Results:
+![alt text](https://github.com/yangzuyuanhao/SLAM/blob/fef14604c2988145069c5031059b59d767a2f952/vo/data/12345.png)
 
 
 
